@@ -39,7 +39,7 @@ func serveStreamer(conn net.Conn, streamer *strmr.Streamer[Chunk]) {
 func serveConsumer(conn net.Conn, consumer *strmr.Consumer[Chunk]) {
   defer consumer.Close()
   for {
-    chunk, ok = <-consumer.C
+    chunk, ok := <-consumer.C
     if !ok {
       break
     }

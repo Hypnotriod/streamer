@@ -17,22 +17,22 @@ const CHUNKS_BUFFER_SIZE = 1024
 const CHUNK_SIZE = 4096
 
 type Chunk struct {
-	Data [CHUNK_SIZE]byte
-	Size int
+  Data [CHUNK_SIZE]byte
+  Size int
 }
 
 func serveStreamer(conn net.Conn, streamer *strmr.Streamer[Chunk]) {
   buffer := [CHUNKS_BUFFER_SIZE]Chunk{}
   index := 0
   for {
-    chunk := &buffer[buffIndex]
-		buffIndex = (buffIndex + 1) % CHUNKS_BUFFER_SIZE
+    chunk := &buffer[index]
+    index = (index + 1) % CHUNKS_BUFFER_SIZE
     size, _ := conn.Read(chunk.Data[:])
     ...
     buffer[index].Size = size
     if !strmr.Broadcast(chunk) {
-			break
-		}
+	break
+    }
   }
 }
 

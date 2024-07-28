@@ -38,6 +38,7 @@ func (c *Consumer[T]) Close() {
 // what happens when the Consumer can't keep up with the Streamer.
 // In any time the Streamer tries to broadcast next data packet and the Consumer
 // channel is already full - overrun occurres, and the data packet will be discarded for this Consumer.
+// If concerned, check this value just before pulling the next packet.
 func (c *Consumer[T]) Overrun() uint {
 	return uint(c.overrun.Load())
 }

@@ -27,13 +27,14 @@ func serveStreamer(conn net.Conn, streamer *strmr.Streamer[Chunk]) {
   buffer := [CHUNKS_BUFFER_SIZE]Chunk{}
   index := 0
   for {
-    // Take the next chunk of data to fill
+    // Take the pointer to the next chunk of data to fill
     chunk := &buffer[index]
     // Increment and wrap around the next chunk index 
     index = (index + 1) % CHUNKS_BUFFER_SIZE
     size, _ := conn.Read(chunk.Data[:])
     ...
     buffer[index].Size = size
+    // Broadcast the next data chunk pointer
     if !strmr.Broadcast(chunk) {
       // Streamer was stopped
       break
@@ -44,6 +45,7 @@ func serveStreamer(conn net.Conn, streamer *strmr.Streamer[Chunk]) {
 func serveConsumer(conn net.Conn, consumer *strmr.Consumer[Chunk]) {
   defer consumer.Close()
   for {
+    // Read the next data chunk pointer
     chunk, ok := <-consumer.C
     if !ok {
       // Consumer was closed

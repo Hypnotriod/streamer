@@ -82,6 +82,7 @@ func NewStreamer[T any](buffSize int) *Streamer[T] {
 
 // NewConsumer creates the new subscribed Consumer of the data type T with the receive channel buffer size of buffSize.
 // buffSize should be at least 1, otherwise, no data packet will ever be received by the Consumer.
+// If the Streamer routine has not been started or the Stop method has been called, C channel will be closed immediately.
 func (s *Streamer[T]) NewConsumer(buffSize int) *Consumer[T] {
 	ch := make(chan *T, buffSize)
 	c := &Consumer[T]{

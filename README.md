@@ -31,8 +31,8 @@ func serveStreamer(conn net.Conn, streamer *strmr.Streamer[Chunk]) {
     chunk := &buffer[index]
     // Increment and wrap around the next chunk index 
     index = (index + 1) % CHUNKS_BUFFER_SIZE
+    // Fill the chunk data array
     size, _ := conn.Read(chunk.Data[:])
-    ...
     buffer[index].Size = size
     // Broadcast the next data chunk pointer
     if !strmr.Broadcast(chunk) {
@@ -56,9 +56,12 @@ func serveConsumer(conn net.Conn, consumer *strmr.Consumer[Chunk]) {
 }
 
 ...
+// Create a new Streamer of the Chunk data with (CHUNKS_BUFFER_SIZE / 2 - 2) buffer size
+// Use the BufferSizeFromTotal function to calculate Streamer and Consumer buffer size in case of circular buffer
 streamer := strmr.NewStreamer[Chunk](strmr.BufferSizeFromTotal(CHUNKS_BUFFER_SIZE)).Run()
 go serveStreamer(streamConn, streamer)
 ...
+// Create a new Consumer
 consumer := streamer.NewConsumer(strmr.BufferSizeFromTotal(CHUNKS_BUFFER_SIZE))
 go serveConsumer(conn, consumer)
 ...

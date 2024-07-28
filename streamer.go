@@ -9,19 +9,19 @@ import (
 	"sync/atomic"
 )
 
-// Client structure represents the consumer of the data stream.
-// Exposes receive-only channel C of the data type *T. May be closed by the Client by calling the Close method, or
+// Consumer structure represents the consumer of the data stream.
+// Exposes receive-only channel C of the data type *T. May be closed by the Consumer by calling the Close method, or
 // by the Streamer in case of the Stop call or overrun.
-type Client[T any] struct {
+type Consumer[T any] struct {
 	streamer *Streamer[T]
 	input    chan<- *T
 	overrun  atomic.Uintptr
 	C        <-chan *T
 }
 
-// Close method closes the receive-only channel C and removes the Client from the Streamer.
-// Should be called if the Client is no longer consuming the data stream.
-func (c *Client[T]) Close() {
+// Close method closes the receive-only channel C and removes the Consumer from the Streamer.
+// Should be called if the Consumer is no longer consuming the data stream.
+func (c *Consumer[T]) Close() {
 	for {
 		select {
 		case _, ok := <-c.C:
@@ -34,11 +34,11 @@ func (c *Client[T]) Close() {
 	}
 }
 
-// Overrun function returns the number of data packets missed by the Client,
-// what happens when the Client can't keep up with the Streamer.
-// In any time the Streamer tries to broadcast next data packet and the Client
-// channel is already full - overrun occurres, and the data packet will be discarded for this Client.
-func (c *Client[T]) Overrun() uint {
+// Overrun function returns the number of data packets missed by the Consumer,
+// what happens when the Consumer can't keep up with the Streamer.
+// In any time the Streamer tries to broadcast next data packet and the Consumer
+// channel is already full - overrun occurres, and the data packet will be discarded for this Consumer.
+func (c *Consumer[T]) Overrun() uint {
 	return uint(c.overrun.Load())
 }
 
@@ -46,19 +46,19 @@ func (c *Client[T]) Overrun() uint {
 type Streamer[T any] struct {
 	mu        sync.Mutex
 	isRunning bool
-	clients   map[*Client[T]]bool
-	add       chan *Client[T]
-	remove    chan *Client[T]
+	consumers map[*Consumer[T]]bool
+	add       chan *Consumer[T]
+	remove    chan *Consumer[T]
 	broadcast chan *T
 	stop      chan bool
 }
 
-// BufferSizeFromTotal function returns the buffer size for the Streamer, as well as for the Client
+// BufferSizeFromTotal function returns the buffer size for the Streamer, as well as for the Consumer
 // when using the circular buffer approach. Accepts the total size of the circular buffer,
 // which must be at least 6.
 // In the case of the Streamer, it is half the size of the circular buffer minus one unprepared
 // packet and minus one extra carry over packet.
-// In the case of the Client, it is half the size of the circular buffer minus one unhandled
+// In the case of the Consumer, it is half the size of the circular buffer minus one unhandled
 // packet and minus one extra carry over packet.
 func BufferSizeFromTotal(total int) int {
 	if total < 6 {
@@ -71,19 +71,19 @@ func BufferSizeFromTotal(total int) int {
 // buffSize is recommended to be at least 1 to prevent blocking when broadcasting data.
 func NewStreamer[T any](buffSize int) *Streamer[T] {
 	return &Streamer[T]{
-		clients:   make(map[*Client[T]]bool),
-		add:       make(chan *Client[T]),
-		remove:    make(chan *Client[T]),
+		consumers: make(map[*Consumer[T]]bool),
+		add:       make(chan *Consumer[T]),
+		remove:    make(chan *Consumer[T]),
 		broadcast: make(chan *T, buffSize),
 		stop:      make(chan bool),
 	}
 }
 
-// NewClient creates the new subscribed Client of the data type T with the receive channel buffer size of buffSize.
-// buffSize should be at least 1, otherwise, no data packet will ever be received by the Client.
-func (s *Streamer[T]) NewClient(buffSize int) *Client[T] {
+// NewConsumer creates the new subscribed Consumer of the data type T with the receive channel buffer size of buffSize.
+// buffSize should be at least 1, otherwise, no data packet will ever be received by the Consumer.
+func (s *Streamer[T]) NewConsumer(buffSize int) *Consumer[T] {
 	ch := make(chan *T, buffSize)
-	c := &Client[T]{
+	c := &Consumer[T]{
 		streamer: s,
 		input:    ch,
 		C:        ch,
@@ -106,7 +106,7 @@ func (s *Streamer[T]) IsRunning() bool {
 	return s.isRunning
 }
 
-// Broadcast function transmits the next data packet of type *T to all subscribed Clients.
+// Broadcast function transmits the next data packet of type *T to all subscribed Consumers.
 // Returns true if the Streamer is still running, false if the Streamer routine
 // has not been started or the Stop method has been called.
 // Will block if broadcast channel is full, till The Streamer routine pulls the data.
@@ -140,30 +140,30 @@ func (s *Streamer[T]) run() {
 	for {
 		select {
 		case <-s.stop:
-			for client := range s.clients {
-				close(client.input)
+			for consumer := range s.consumers {
+				close(consumer.input)
 			}
-			clear(s.clients)
+			clear(s.consumers)
 			for _, ok := <-s.broadcast; ok; {
 			}
 			return
-		case client := <-s.add:
-			s.clients[client] = true
-		case client := <-s.remove:
-			if _, ok := s.clients[client]; ok {
-				delete(s.clients, client)
-				close(client.input)
+		case consumer := <-s.add:
+			s.consumers[consumer] = true
+		case consumer := <-s.remove:
+			if _, ok := s.consumers[consumer]; ok {
+				delete(s.consumers, consumer)
+				close(consumer.input)
 			}
 		case packet := <-s.broadcast:
-			for client := range s.clients {
+			for consumer := range s.consumers {
 				select {
-				case client.input <- packet:
-					client.overrun.Store(0)
+				case consumer.input <- packet:
+					consumer.overrun.Store(0)
 				default:
-					overrun := client.overrun.Add(1)
+					overrun := consumer.overrun.Add(1)
 					if int(overrun) > cap(s.broadcast) {
-						delete(s.clients, client)
-						close(client.input)
+						delete(s.consumers, consumer)
+						close(consumer.input)
 					}
 				}
 			}
@@ -171,7 +171,7 @@ func (s *Streamer[T]) run() {
 	}
 }
 
-// Stop stops the Streamer and all subscribed Clients.
+// Stop stops the Streamer and all subscribed Consumers.
 // Returns true if the Streamer was closed successfully, false if the Streamer routine
 // has not been started or the Stop method has already been called.
 func (s *Streamer[T]) Stop() bool {

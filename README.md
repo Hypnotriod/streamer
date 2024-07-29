@@ -2,7 +2,7 @@
 Streamer is a Go package that implements a Fan Out like pattern to distribute a real-time data stream to dynamically subscribed consumers.
 
 # Usage
-Typical usage would be a real-time asynchronous video, audio, telemetry, e.t.c. data streaming distribution. Where the number of the consumers can vary over time.  
+A typical use would be the distribution of an isochronous data stream (video, audio, telemetry, etc.) in real time. Where the number of the consumers can vary over time.  
 Designed with [circular buffer](https://en.wikipedia.org/wiki/Circular_buffer) approach in mind. The data buffer can be allocated once and reuse, offloading the garbage collector.  
 To avoid situations where the `Streamer` broadcast may be blocked by some `Consumers` because their channel is full, the idea of ​​buffer `overrun` is introduced. If some of the `Consumers` can no longer keep up with the `Streamer`, data packets are being dropped for that particular `Consumer` and `overrun` counter is incremented. If the number of dropped packets exceeds the `Streamer` buffer size, the `Consumer` will be closed by the `Streamer`.  
 

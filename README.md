@@ -35,7 +35,7 @@ func serveStreamer(conn net.Conn, streamer *strmr.Streamer[Chunk]) {
     size, _ := conn.Read(chunk.Data[:])
     buffer[index].Size = size
     // Broadcast the next data chunk pointer
-    if !strmr.Broadcast(chunk) {
+    if !streamer.Broadcast(chunk) {
       // Streamer was stopped
       break
     }
@@ -61,9 +61,10 @@ func serveConsumer(conn net.Conn, consumer *strmr.Consumer[Chunk]) {
 streamer := strmr.NewStreamer[Chunk](strmr.BufferSizeFromTotal(CHUNKS_BUFFER_SIZE)).Run()
 go serveStreamer(streamConn, streamer)
 ...
-// Create a new Consumer
+// Create a new Consumer of the Chunk data with (CHUNKS_BUFFER_SIZE / 2 - 2) buffer size
 consumer := streamer.NewConsumer(strmr.BufferSizeFromTotal(CHUNKS_BUFFER_SIZE))
-go serveConsumer(conn, consumer)
+go serveConsumer(consumerConn, consumer)
 ...
+// Stop the Streamer and all subscribed Consumers
 streamer.Stop()
 ```

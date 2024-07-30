@@ -57,7 +57,8 @@ func serveConsumer(conn net.Conn, consumer *strmr.Consumer[Chunk]) {
 
 ...
 // Create a new Streamer of the Chunk data with (CHUNKS_BUFFER_SIZE / 2 - 2) buffer size
-// Use the BufferSizeFromTotal function to calculate Streamer and Consumer buffer size in case of circular buffer
+// Use the BufferSizeFromTotal function to calculate Streamer and Consumer buffer size
+// in case of circular buffer
 streamer := strmr.NewStreamer[Chunk](strmr.BufferSizeFromTotal(CHUNKS_BUFFER_SIZE)).Run()
 go serveStreamer(streamConn, streamer)
 ...

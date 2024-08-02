@@ -47,11 +47,11 @@ func (c *Consumer[T]) Overrun() uint {
 type Streamer[T any] struct {
 	mu        sync.Mutex
 	isRunning bool
-	consumers map[*Consumer[T]]bool
+	consumers map[*Consumer[T]]struct{}
 	add       chan *Consumer[T]
 	remove    chan *Consumer[T]
 	broadcast chan *T
-	stop      chan bool
+	stop      chan struct{}
 }
 
 // BufferSizeFromTotal function returns the buffer size for the Streamer, as well as for the Consumer
@@ -72,11 +72,11 @@ func BufferSizeFromTotal(total int) int {
 // buffSize is recommended to be at least 1 to prevent blocking when broadcasting data.
 func NewStreamer[T any](buffSize int) *Streamer[T] {
 	return &Streamer[T]{
-		consumers: make(map[*Consumer[T]]bool),
+		consumers: make(map[*Consumer[T]]struct{}),
 		add:       make(chan *Consumer[T]),
 		remove:    make(chan *Consumer[T]),
 		broadcast: make(chan *T, buffSize),
-		stop:      make(chan bool),
+		stop:      make(chan struct{}),
 	}
 }
 
@@ -150,7 +150,7 @@ func (s *Streamer[T]) run() {
 			}
 			return
 		case consumer := <-s.add:
-			s.consumers[consumer] = true
+			s.consumers[consumer] = struct{}{}
 		case consumer := <-s.remove:
 			if _, ok := s.consumers[consumer]; ok {
 				delete(s.consumers, consumer)
@@ -183,7 +183,7 @@ func (s *Streamer[T]) Stop() bool {
 		return false
 	}
 	s.isRunning = false
-	s.stop <- true
+	s.stop <- struct{}{}
 	s.mu.Unlock()
 	return true
 }

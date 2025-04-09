@@ -33,7 +33,7 @@ func serveStreamer(conn net.Conn, streamer *strmr.Streamer[Chunk]) {
     index = (index + 1) % CHUNKS_BUFFER_SIZE
     // Fill the chunk data array
     size, _ := conn.Read(chunk.Data[:])
-    buffer[index].Size = size
+    chunk.Size = size
     // Broadcast the next data chunk pointer
     if !streamer.Broadcast(chunk) {
       // Streamer was stopped

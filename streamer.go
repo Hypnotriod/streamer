@@ -45,13 +45,14 @@ func (c *Consumer[T]) Overrun() uint {
 
 // Streamer structure represents the producer of the data stream.
 type Streamer[T any] struct {
-	mu        sync.Mutex
-	isRunning bool
-	consumers map[*Consumer[T]]struct{}
-	add       chan *Consumer[T]
-	remove    chan *Consumer[T]
-	broadcast chan *T
-	stop      chan struct{}
+	mu              sync.Mutex
+	isRunning       bool
+	consumers       map[*Consumer[T]]struct{}
+	consumersNumber atomic.Int64
+	add             chan *Consumer[T]
+	remove          chan *Consumer[T]
+	broadcast       chan *T
+	stop            chan struct{}
 }
 
 // BufferSizeFromTotal function returns the buffer size for the Streamer, as well as for the Consumer
@@ -82,6 +83,7 @@ func NewStreamer[T any](buffSize int) *Streamer[T] {
 
 // NewConsumer creates the new subscribed Consumer of the data type T with the receive channel buffer size of buffSize.
 // buffSize should be at least 1, otherwise, no data packet will ever be received by the Consumer.
+// Please use the BufferSizeFromTotal function to calculate buffSize in case of the circular buffer approach.
 // If the Streamer routine has not been started or the Stop method has been called, C channel will be closed immediately.
 func (s *Streamer[T]) NewConsumer(buffSize int) *Consumer[T] {
 	ch := make(chan *T, buffSize)
@@ -106,6 +108,11 @@ func (s *Streamer[T]) IsRunning() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.isRunning
+}
+
+// ConsumersNumber function returns the number of subscribed Consumers.
+func (s *Streamer[T]) ConsumersNumber() int64 {
+	return s.consumersNumber.Load()
 }
 
 // Broadcast function transmits the next data packet of type *T to all subscribed Consumers.
@@ -146,15 +153,18 @@ func (s *Streamer[T]) run() {
 				close(consumer.input)
 			}
 			clear(s.consumers)
+			s.consumersNumber.Store(0)
 			for _, ok := <-s.broadcast; ok; {
 			}
 			return
 		case consumer := <-s.add:
 			s.consumers[consumer] = struct{}{}
+			s.consumersNumber.Add(1)
 		case consumer := <-s.remove:
 			if _, ok := s.consumers[consumer]; ok {
 				delete(s.consumers, consumer)
 				close(consumer.input)
+				s.consumersNumber.Add(-1)
 			}
 		case packet := <-s.broadcast:
 			for consumer := range s.consumers {
@@ -166,6 +176,7 @@ func (s *Streamer[T]) run() {
 					if int(overrun) > cap(s.broadcast) {
 						delete(s.consumers, consumer)
 						close(consumer.input)
+						s.consumersNumber.Add(-1)
 					}
 				}
 			}
